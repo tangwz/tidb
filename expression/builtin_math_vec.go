@@ -823,28 +823,31 @@ func (b *builtinFloorDecToDecSig) vecEvalDecimal(input *chunk.Chunk, result *chu
 		}
 
 		if !d64s[i].IsNegative() {
-			err := d64s[i].Round(res, 0, types.ModeTruncate)
-			d64s[i] = *res
-			if err != nil {
-				return err
+			if err := d64s[i].Round(res, 0, types.ModeTruncate); err != nil {
+				result.SetNull(i, true)
+				continue
 			}
+			d64s[i] = *res
 			continue
 		}
 
 		err := d64s[i].Round(res, 0, types.ModeTruncate)
 		if err != nil || res.Compare(&d64s[i]) == 0 {
-			d64s[i] = *res
 			if err != nil {
-				return err
+				result.SetNull(i, true)
+				continue
+				// return err
 			}
+			d64s[i] = *res
 			continue
 		}
 
 		err = types.DecimalSub(res, types.NewDecFromInt(1), res)
-		d64s[i] = *res
 		if err != nil {
-			return err
+			result.SetNull(i, true)
+			continue
 		}
+		d64s[i] = *res
 	}
 	return nil
 }
