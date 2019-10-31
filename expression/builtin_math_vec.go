@@ -808,11 +808,45 @@ func (b *builtinCeilDecToDecSig) vecEvalDecimal(input *chunk.Chunk, result *chun
 }
 
 func (b *builtinFloorDecToDecSig) vectorized() bool {
-	return false
+	return true
 }
 
 func (b *builtinFloorDecToDecSig) vecEvalDecimal(input *chunk.Chunk, result *chunk.Column) error {
-	return errors.Errorf("not implemented")
+	if err := b.args[0].VecEvalDecimal(b.ctx, input, result); err != nil {
+		return err
+	}
+	d64s := result.Decimals()
+	res := new(types.MyDecimal)
+	for i := 0; i < len(d64s); i++ {
+		if result.IsNull(i) {
+			continue
+		}
+
+		if !d64s[i].IsNegative() {
+			err := d64s[i].Round(res, 0, types.ModeTruncate)
+			d64s[i] = *res
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		err := d64s[i].Round(res, 0, types.ModeTruncate)
+		if err != nil || res.Compare(&d64s[i]) == 0 {
+			d64s[i] = *res
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		err = types.DecimalSub(res, types.NewDecFromInt(1), res)
+		d64s[i] = *res
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (b *builtinTruncateDecimalSig) vectorized() bool {
